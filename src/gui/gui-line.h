@@ -142,6 +142,8 @@ extern void gui_line_hook_update (struct t_gui_line *line,
                                   struct t_hashtable *hashtable,
                                   struct t_hashtable *hashtable2);
 extern void gui_line_add (struct t_gui_line *line);
+extern void gui_line_add_before (struct t_gui_line *line,
+                                 struct t_gui_line *before_line);
 extern void gui_line_add_y (struct t_gui_line *line);
 extern void gui_line_clear (struct t_gui_line *line);
 extern void gui_line_mix_buffers (struct t_gui_buffer *buffer);

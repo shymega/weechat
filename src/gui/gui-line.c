@@ -1381,6 +1381,49 @@ gui_line_mixed_add (struct t_gui_lines *lines,
 }
 
 /*
+ * Add line to mixed lines for a buffer, before an existing mixed line.
+ */
+
+void
+gui_line_mixed_add_before (struct t_gui_lines *lines,
+                           struct t_gui_line_data *line_data,
+                           struct t_gui_line *before_line)
+{
+    struct t_gui_line *new_line;
+    int prefix_length, prefix_is_nick;
+
+    new_line = malloc (sizeof (*new_line));
+    if (!new_line)
+        return;
+
+    new_line->data = line_data;
+
+    new_line->prev_line = before_line->prev_line;
+    new_line->next_line = before_line;
+    if (before_line->prev_line)
+        (before_line->prev_line)->next_line = new_line;
+    else
+        lines->first_line = new_line;
+    before_line->prev_line = new_line;
+
+    if (line_data->displayed)
+    {
+        gui_line_get_prefix_for_display (new_line, NULL, &prefix_length, NULL,
+                                         &prefix_is_nick);
+        if (prefix_is_nick)
+            prefix_length += config_length_nick_prefix_suffix;
+        if (prefix_length > lines->prefix_max_length)
+            lines->prefix_max_length = prefix_length;
+    }
+    else
+    {
+        (lines->lines_hidden)++;
+    }
+
+    lines->lines_count++;
+}
+
+/*
  * Free all mixed lines matching a buffer.
  */
 
@@ -1998,6 +2041,139 @@ gui_line_add (struct t_gui_line *line)
             }
         }
     }
+
+    (void) gui_buffer_send_signal (line->data->buffer,
+                                   "buffer_line_added",
+                                   WEECHAT_HOOK_SIGNAL_POINTER, line);
+}
+
+/*
+ * Add a new line in a buffer with formatted content, before an existing line.
+ *
+ * If before_line is NULL, the line is added at the end of the buffer
+ * (same as gui_line_add).
+ */
+
+void
+gui_line_add_before (struct t_gui_line *line, struct t_gui_line *before_line)
+{
+    struct t_gui_line *ptr_line;
+    char *message_for_signal;
+    int prefix_length, prefix_is_nick;
+
+    if (!before_line)
+    {
+        gui_line_add (line);
+        return;
+    }
+
+    /* insert before before_line in own_lines */
+    line->prev_line = before_line->prev_line;
+    line->next_line = before_line;
+    if (before_line->prev_line)
+        (before_line->prev_line)->next_line = line;
+    else
+        line->data->buffer->own_lines->first_line = line;
+    before_line->prev_line = line;
+
+    if (line->data->displayed)
+    {
+        gui_line_get_prefix_for_display (line, NULL, &prefix_length, NULL,
+                                         &prefix_is_nick);
+        if (prefix_is_nick)
+            prefix_length += config_length_nick_prefix_suffix;
+        if (prefix_length > line->data->buffer->own_lines->prefix_max_length)
+            line->data->buffer->own_lines->prefix_max_length = prefix_length;
+    }
+    else
+    {
+        (line->data->buffer->own_lines->lines_hidden)++;
+    }
+
+    line->data->buffer->own_lines->lines_count++;
+
+    /* update hotlist and/or send signals for line */
+    if (line->data->displayed)
+    {
+        if ((line->data->notify_level >= GUI_HOTLIST_MIN)
+            && line->data->highlight)
+        {
+            (void) gui_hotlist_add (
+                line->data->buffer,
+                GUI_HOTLIST_HIGHLIGHT,
+                NULL,  /* creation_time */
+                1);  /* check_conditions */
+            if (!weechat_upgrading)
+            {
+                message_for_signal = gui_line_build_string_prefix_message (
+                    line->data->prefix, line->data->message);
+                if (message_for_signal)
+                {
+                    (void) hook_signal_send ("weechat_highlight",
+                                             WEECHAT_HOOK_SIGNAL_STRING,
+                                             message_for_signal);
+                    free (message_for_signal);
+                }
+            }
+        }
+        else
+        {
+            if (!weechat_upgrading
+                && (line->data->notify_level == GUI_HOTLIST_PRIVATE))
+            {
+                message_for_signal = gui_line_build_string_prefix_message (
+                    line->data->prefix, line->data->message);
+                if (message_for_signal)
+                {
+                    (void) hook_signal_send ("weechat_pv",
+                                             WEECHAT_HOOK_SIGNAL_STRING,
+                                             message_for_signal);
+                    free (message_for_signal);
+                }
+            }
+            if (line->data->notify_level >= GUI_HOTLIST_MIN)
+            {
+                (void) gui_hotlist_add (
+                    line->data->buffer,
+                    line->data->notify_level,
+                    NULL,  /* creation_time */
+                    1);  /* check_conditions */
+            }
+        }
+    }
+    else
+    {
+        (void) gui_buffer_send_signal (line->data->buffer,
+                                       "buffer_lines_hidden",
+                                       WEECHAT_HOOK_SIGNAL_POINTER,
+                                       line->data->buffer);
+    }
+
+    /* add mixed line, if buffer is attached to at least one other buffer */
+    if (line->data->buffer->mixed_lines)
+    {
+        /*
+         * find the mixed line corresponding to before_line and insert
+         * before it; if not found, just append at the end
+         */
+        for (ptr_line = line->data->buffer->mixed_lines->first_line; ptr_line;
+             ptr_line = ptr_line->next_line)
+        {
+            if (ptr_line->data == before_line->data)
+                break;
+        }
+        if (ptr_line)
+        {
+            gui_line_mixed_add_before (line->data->buffer->mixed_lines,
+                                       line->data, ptr_line);
+        }
+        else
+        {
+            gui_line_mixed_add (line->data->buffer->mixed_lines, line->data);
+        }
+    }
+
+    gui_buffer_ask_chat_refresh (line->data->buffer, 2);
 
     (void) gui_buffer_send_signal (line->data->buffer,
                                    "buffer_line_added",
