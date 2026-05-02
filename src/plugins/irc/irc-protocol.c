@@ -66,6 +66,25 @@
 
 
 /*
+ * Print a message to a channel buffer, inserting before a specific line when
+ * processing a chathistory batch (preserving chronological order), or
+ * appending normally otherwise.
+ */
+#define IRC_CHAT_PRINTF(ctxt, buffer, date, usec, tags, ...)                  \
+    do {                                                                       \
+        if ((ctxt)->server->chathistory_before_line_id >= 0                   \
+            && (buffer) == (ctxt)->server->chathistory_buffer)                \
+            weechat_printf_datetime_tags_before (                             \
+                (buffer),                                                     \
+                (ctxt)->server->chathistory_before_line_id,                   \
+                (date), (usec), (tags), __VA_ARGS__);                         \
+        else                                                                  \
+            weechat_printf_datetime_tags (                                    \
+                (buffer), (date), (usec), (tags), __VA_ARGS__);               \
+    } while (0)
+
+
+/*
  * Free data in structure t_irc_protocol_ctxt.
  */
 
@@ -671,6 +690,10 @@ IRC_PROTOCOL_CALLBACK(away)
 IRC_PROTOCOL_CALLBACK(batch)
 {
     char *str_params;
+    struct t_irc_batch *ptr_batch;
+    struct t_irc_channel *ptr_channel;
+    struct t_hdata *hdata_buffer, *hdata_lines, *hdata_line, *hdata_line_data;
+    void *ptr_own_lines, *ptr_first_line, *ptr_line_data;
 
     IRC_PROTOCOL_MIN_PARAMS(1);
 
@@ -685,7 +708,7 @@ IRC_PROTOCOL_CALLBACK(batch)
             return WEECHAT_RC_ERROR;
         str_params = (ctxt->num_params > 2) ?
             irc_protocol_string_params (ctxt->params, 2, ctxt->num_params - 1) : NULL;
-        irc_batch_start_batch (
+        ptr_batch = irc_batch_start_batch (
             ctxt->server,
             ctxt->params[0] + 1,  /* reference */
             weechat_hashtable_get (ctxt->tags, "batch"),  /* parent ref */
@@ -693,6 +716,45 @@ IRC_PROTOCOL_CALLBACK(batch)
             str_params,
             ctxt->tags);
         free (str_params);
+        /*
+         * for chathistory batches, record the target buffer and the id of the
+         * first line currently in that buffer so messages can be inserted
+         * before it (preserving chronological order)
+         */
+        if (ptr_batch
+            && (strcmp (ctxt->params[1], "chathistory") == 0)
+            && ptr_batch->parameters)
+        {
+            ptr_channel = irc_channel_search (ctxt->server,
+                                              ptr_batch->parameters);
+            if (ptr_channel && ptr_channel->buffer)
+            {
+                ptr_batch->chathistory_buffer = ptr_channel->buffer;
+                /* get first line id via hdata plugin API */
+                hdata_buffer = weechat_hdata_get ("buffer");
+                hdata_lines = weechat_hdata_get ("lines");
+                hdata_line = weechat_hdata_get ("line");
+                hdata_line_data = weechat_hdata_get ("line_data");
+                ptr_own_lines = weechat_hdata_pointer (
+                    hdata_buffer, ptr_channel->buffer, "own_lines");
+                if (ptr_own_lines)
+                {
+                    ptr_first_line = weechat_hdata_pointer (
+                        hdata_lines, ptr_own_lines, "first_line");
+                    if (ptr_first_line)
+                    {
+                        ptr_line_data = weechat_hdata_pointer (
+                            hdata_line, ptr_first_line, "data");
+                        if (ptr_line_data)
+                        {
+                            ptr_batch->chathistory_before_line_id =
+                                weechat_hdata_integer (
+                                    hdata_line_data, ptr_line_data, "id");
+                        }
+                    }
+                }
+            }
+        }
     }
     else if (ctxt->params[0][0] == '-')
     {
@@ -2630,7 +2692,8 @@ IRC_PROTOCOL_CALLBACK(notice)
                           "notify_message" :
                           weechat_config_string (irc_config_look_notice_welcome_tags));
             }
-            weechat_printf_datetime_tags (
+            IRC_CHAT_PRINTF (
+                ctxt,
                 (ptr_channel) ? ptr_channel->buffer : ctxt->server->buffer,
                 ctxt->date,
                 ctxt->date_usec,
@@ -3150,7 +3213,8 @@ IRC_PROTOCOL_CALLBACK(privmsg)
             if (status_msg)
             {
                 /* message to channel ops/voiced (to "@#channel" or "+#channel") */
-                weechat_printf_datetime_tags (
+                IRC_CHAT_PRINTF (
+                    ctxt,
                     ptr_channel->buffer,
                     ctxt->date,
                     ctxt->date_usec,
@@ -3195,7 +3259,8 @@ IRC_PROTOCOL_CALLBACK(privmsg)
                               (str_color) ? str_color : "default");
                 }
                 free (str_color);
-                weechat_printf_datetime_tags (
+                IRC_CHAT_PRINTF (
+                    ctxt,
                     ptr_channel->buffer,
                     ctxt->date,
                     ctxt->date_usec,
