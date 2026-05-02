@@ -887,7 +887,11 @@ gui_chat_pipe_end (void)
 /*
  * Display a message in a buffer with optional date and tags.
  *
- * This function is called internally by the function gui_chat_printf_date_tags.
+ * This function is called internally by the functions
+ * gui_chat_printf_datetime_tags and gui_chat_printf_datetime_tags_before.
+ *
+ * If before_line is not NULL, the new line is inserted before it; otherwise
+ * it is appended at the end of the buffer.
  */
 
 void
@@ -897,7 +901,8 @@ gui_chat_printf_datetime_tags_internal (struct t_gui_buffer *buffer,
                                         time_t date_printed,
                                         int date_usec_printed,
                                         const char *tags,
-                                        char *message)
+                                        char *message,
+                                        struct t_gui_line *before_line)
 {
     int display_time;
     char *ptr_msg, *pos_prefix, *pos_tab;
@@ -1078,13 +1083,14 @@ gui_chat_printf_datetime_tags_internal (struct t_gui_buffer *buffer,
     }
 
     /* add line in the buffer */
-    gui_line_add (new_line);
+    gui_line_add_before (new_line, before_line);
 
     /* run hook_print for the new line */
     if (new_line->data->buffer && new_line->data->buffer->print_hooks_enabled)
         hook_print_exec (new_line->data->buffer, new_line);
 
-    gui_buffer_ask_chat_refresh (new_line->data->buffer, 1);
+    if (!before_line)
+        gui_buffer_ask_chat_refresh (new_line->data->buffer, 1);
 
     free (string);
     free (modifier_data);
@@ -1234,7 +1240,8 @@ gui_chat_printf_datetime_tags (struct t_gui_buffer *buffer,
                                                     tv_date_printed.tv_sec,
                                                     tv_date_printed.tv_usec,
                                                     tags,
-                                                    pos);
+                                                    pos,
+                                                    NULL);
         }
         else
         {
@@ -1383,6 +1390,116 @@ gui_chat_printf_y_datetime_tags (struct t_gui_buffer *buffer, int y,
 
 end:
     free (vbuffer);
+}
+
+/*
+ * Display a message in a buffer with formatted content, before an existing
+ * line identified by its id.
+ *
+ * Note: this function works only with formatted buffers (not buffers with free
+ * content).
+ */
+
+void
+gui_chat_printf_datetime_tags_before (struct t_gui_buffer *buffer,
+                                      int line_id,
+                                      time_t date, int date_usec,
+                                      const char *tags,
+                                      const char *message, ...)
+{
+    struct t_gui_line *before_line;
+    struct timeval tv_date_printed;
+    char *pos, *pos_end;
+    int one_line;
+
+    if (!message)
+        return;
+
+    if (gui_init_ok && !gui_chat_buffer_valid (buffer, GUI_BUFFER_TYPE_FORMATTED))
+        return;
+
+    before_line = gui_line_search_by_id (buffer, line_id);
+    if (!before_line)
+        return;
+
+    weechat_va_format (message);
+    if (!vbuffer)
+        return;
+
+    utf8_normalize (vbuffer, '?');
+
+    gettimeofday (&tv_date_printed, NULL);
+    if (date <= 0)
+    {
+        date = tv_date_printed.tv_sec;
+        date_usec = tv_date_printed.tv_usec;
+    }
+
+    one_line = 0;
+    pos = vbuffer;
+    while (pos)
+    {
+        pos_end = NULL;
+        if (!buffer || !buffer->input_multiline)
+        {
+            pos_end = strchr (pos, '\n');
+            if (pos_end)
+                pos_end[0] = '\0';
+        }
+        else
+        {
+            one_line = 1;
+        }
+
+        if (gui_init_ok)
+        {
+            gui_chat_printf_datetime_tags_internal (buffer,
+                                                    date,
+                                                    date_usec,
+                                                    tv_date_printed.tv_sec,
+                                                    tv_date_printed.tv_usec,
+                                                    tags,
+                                                    pos,
+                                                    before_line);
+        }
+
+        if (one_line)
+            break;
+
+        pos = (pos_end && pos_end[1]) ? pos_end + 1 : NULL;
+    }
+
+    free (vbuffer);
+}
+
+/*
+ * Delete a line in a buffer with formatted content, identified by its id.
+ *
+ * Note: this function works only with formatted buffers (not buffers with free
+ * content).
+ */
+
+void
+gui_chat_delete_line (struct t_gui_buffer *buffer, int line_id)
+{
+    struct t_gui_line *ptr_line;
+
+    if (!buffer)
+        return;
+
+    if (gui_init_ok && !gui_chat_buffer_valid (buffer, GUI_BUFFER_TYPE_FORMATTED))
+        return;
+
+    ptr_line = gui_line_search_by_id (buffer, line_id);
+    if (!ptr_line)
+        return;
+
+    gui_line_free (buffer, ptr_line);
+    gui_buffer_ask_chat_refresh (buffer, 2);
+
+    (void) gui_buffer_send_signal (buffer,
+                                   "buffer_line_deleted",
+                                   WEECHAT_HOOK_SIGNAL_POINTER, buffer);
 }
 
 /*

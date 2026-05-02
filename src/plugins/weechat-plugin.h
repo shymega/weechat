@@ -1279,6 +1279,14 @@ struct t_weechat_plugin
                                  struct t_infolist *infolist);
     int (*upgrade_read) (struct t_upgrade_file *upgrade_file);
     void (*upgrade_close) (struct t_upgrade_file *upgrade_file);
+
+    /* display (added in WeeChat 4.6.0) */
+    void (*printf_datetime_tags_before) (struct t_gui_buffer *buffer,
+                                         int line_id,
+                                         time_t date, int date_usec,
+                                         const char *tags,
+                                         const char *message, ...);
+    void (*buffer_delete_line) (struct t_gui_buffer *buffer, int line_id);
 };
 
 extern int weechat_plugin_init (struct t_weechat_plugin *plugin,
@@ -1888,6 +1896,26 @@ extern int weechat_plugin_end (struct t_weechat_plugin *plugin);
     (weechat_plugin->printf_y_datetime_tags)(__buffer, __y, __date,     \
                                              __date_usec, __tags,       \
                                              __message, ##__argz)
+#define weechat_printf_before(__buffer, __line_id, __message,           \
+                              __argz...)                                \
+    (weechat_plugin->printf_datetime_tags_before)(__buffer, __line_id,  \
+                                                  0, 0, NULL,           \
+                                                  __message, ##__argz)
+#define weechat_printf_date_tags_before(__buffer, __line_id, __date,    \
+                                        __tags, __message, __argz...)   \
+    (weechat_plugin->printf_datetime_tags_before)(__buffer, __line_id,  \
+                                                  __date, 0, __tags,    \
+                                                  __message, ##__argz)
+#define weechat_printf_datetime_tags_before(__buffer, __line_id,        \
+                                            __date, __date_usec,        \
+                                            __tags, __message,          \
+                                            __argz...)                  \
+    (weechat_plugin->printf_datetime_tags_before)(__buffer, __line_id,  \
+                                                  __date, __date_usec,  \
+                                                  __tags, __message,    \
+                                                  ##__argz)
+#define weechat_buffer_delete_line(__buffer, __line_id)                 \
+    (weechat_plugin->buffer_delete_line)(__buffer, __line_id)
 #define weechat_log_printf(__message, __argz...)                        \
     (weechat_plugin->log_printf)(__message, ##__argz)
 

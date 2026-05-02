@@ -805,6 +805,8 @@ plugin_load (const char *filename, int init_plugin, int argc, char **argv)
         new_plugin->color = &plugin_api_color;
         new_plugin->printf_datetime_tags = &gui_chat_printf_datetime_tags;
         new_plugin->printf_y_datetime_tags = &gui_chat_printf_y_datetime_tags;
+        new_plugin->printf_datetime_tags_before = &gui_chat_printf_datetime_tags_before;
+        new_plugin->buffer_delete_line = &gui_chat_delete_line;
         new_plugin->log_printf = &log_printf;
 
         new_plugin->hook_command = &hook_command;

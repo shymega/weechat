@@ -42,6 +42,15 @@ struct t_gui_line;
 #define gui_chat_printf_y_date_tags(buffer, y, date, tags, argz...)     \
     gui_chat_printf_y_datetime_tags(buffer, y, date, 0, tags, ##argz)
 
+#define gui_chat_printf_before(buffer, line_id, argz...)                \
+    gui_chat_printf_datetime_tags_before(buffer, line_id, 0, 0, NULL,  \
+                                         ##argz)
+
+#define gui_chat_printf_date_tags_before(buffer, line_id, date, tags,  \
+                                          argz...)                      \
+    gui_chat_printf_datetime_tags_before(buffer, line_id, date, 0,     \
+                                         tags, ##argz)
+
 #define GUI_CHAT_TAG_NO_HIGHLIGHT "no_highlight"
 
 #define GUI_CHAT_PREFIX_ERROR_DEFAULT   "=!="
@@ -132,6 +141,12 @@ extern void gui_chat_printf_y_datetime_tags (struct t_gui_buffer *buffer,
                                              time_t date, int date_usec,
                                              const char *tags,
                                              const char *message, ...);
+extern void gui_chat_printf_datetime_tags_before (struct t_gui_buffer *buffer,
+                                                  int line_id,
+                                                  time_t date, int date_usec,
+                                                  const char *tags,
+                                                  const char *message, ...);
+extern void gui_chat_delete_line (struct t_gui_buffer *buffer, int line_id);
 extern void gui_chat_print_lines_waiting_buffer (FILE *f);
 extern int gui_chat_hsignal_quote_line_cb (const void *pointer, void *data,
                                            const char *signal,
