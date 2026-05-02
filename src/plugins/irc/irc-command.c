@@ -54,6 +54,7 @@
 #include "irc-notify.h"
 #include "irc-protocol.h"
 #include "irc-raw.h"
+#include "irc-chathistory.h"
 #include "irc-sasl.h"
 #include "irc-server.h"
 
@@ -6965,6 +6966,131 @@ IRC_COMMAND_CALLBACK(whowas)
 }
 
 /*
+ * Callback for command "/chathistory": request message history from the
+ * server using the IRCv3 draft/chathistory capability.
+ *
+ * See: https://ircv3.net/specs/extensions/chathistory
+ */
+
+IRC_COMMAND_CALLBACK(chathistory)
+{
+    const char *target, *anchor1, *anchor2;
+    int limit;
+
+    IRC_BUFFER_GET_SERVER_CHANNEL(buffer);
+    IRC_COMMAND_CHECK_SERVER("chathistory", 1, 1);
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+
+    if (!irc_chathistory_enabled (ptr_server))
+    {
+        weechat_printf (
+            ptr_server->buffer,
+            _("%s%s: the capability \"%s\" is not enabled on this server"),
+            weechat_prefix ("error"), IRC_PLUGIN_NAME,
+            IRC_CHATHISTORY_CAP);
+        return WEECHAT_RC_OK;
+    }
+
+    /* default: fetch latest messages for the current channel */
+    if (argc == 1)
+    {
+        if (!ptr_channel)
+        {
+            weechat_printf (
+                ptr_server->buffer,
+                _("%s%s: chathistory: no target channel, use "
+                  "/chathistory <subcommand> <target> [...]"),
+                weechat_prefix ("error"), IRC_PLUGIN_NAME);
+            return WEECHAT_RC_OK;
+        }
+        irc_chathistory_send (ptr_server,
+                              IRC_CHATHISTORY_SUB_LATEST,
+                              ptr_channel->name,
+                              "*",
+                              NULL,
+                              IRC_CHATHISTORY_DEFAULT_LIMIT);
+        return WEECHAT_RC_OK;
+    }
+
+    /* /chathistory latest [<target>] [<limit>] */
+    if (weechat_strcasecmp (argv[1], "latest") == 0)
+    {
+        target = (argc >= 3) ? argv[2] :
+            (ptr_channel ? ptr_channel->name : NULL);
+        limit = (argc >= 4) ? atoi (argv[3]) : IRC_CHATHISTORY_DEFAULT_LIMIT;
+        if (!target)
+            WEECHAT_COMMAND_ERROR;
+        irc_chathistory_send (ptr_server, IRC_CHATHISTORY_SUB_LATEST,
+                              target, "*", NULL, limit);
+    }
+    /* /chathistory before <target> <anchor> [<limit>] */
+    else if (weechat_strcasecmp (argv[1], "before") == 0)
+    {
+        if (argc < 4)
+            WEECHAT_COMMAND_ERROR;
+        target = argv[2];
+        anchor1 = argv[3];
+        limit = (argc >= 5) ? atoi (argv[4]) : IRC_CHATHISTORY_DEFAULT_LIMIT;
+        irc_chathistory_send (ptr_server, IRC_CHATHISTORY_SUB_BEFORE,
+                              target, anchor1, NULL, limit);
+    }
+    /* /chathistory after <target> <anchor> [<limit>] */
+    else if (weechat_strcasecmp (argv[1], "after") == 0)
+    {
+        if (argc < 4)
+            WEECHAT_COMMAND_ERROR;
+        target = argv[2];
+        anchor1 = argv[3];
+        limit = (argc >= 5) ? atoi (argv[4]) : IRC_CHATHISTORY_DEFAULT_LIMIT;
+        irc_chathistory_send (ptr_server, IRC_CHATHISTORY_SUB_AFTER,
+                              target, anchor1, NULL, limit);
+    }
+    /* /chathistory around <target> <anchor> [<limit>] */
+    else if (weechat_strcasecmp (argv[1], "around") == 0)
+    {
+        if (argc < 4)
+            WEECHAT_COMMAND_ERROR;
+        target = argv[2];
+        anchor1 = argv[3];
+        limit = (argc >= 5) ? atoi (argv[4]) : IRC_CHATHISTORY_DEFAULT_LIMIT;
+        irc_chathistory_send (ptr_server, IRC_CHATHISTORY_SUB_AROUND,
+                              target, anchor1, NULL, limit);
+    }
+    /* /chathistory between <target> <anchor1> <anchor2> [<limit>] */
+    else if (weechat_strcasecmp (argv[1], "between") == 0)
+    {
+        if (argc < 5)
+            WEECHAT_COMMAND_ERROR;
+        target = argv[2];
+        anchor1 = argv[3];
+        anchor2 = argv[4];
+        limit = (argc >= 6) ? atoi (argv[5]) : IRC_CHATHISTORY_DEFAULT_LIMIT;
+        irc_chathistory_send (ptr_server, IRC_CHATHISTORY_SUB_BETWEEN,
+                              target, anchor1, anchor2, limit);
+    }
+    /* /chathistory targets <anchor1> <anchor2> [<limit>] */
+    else if (weechat_strcasecmp (argv[1], "targets") == 0)
+    {
+        if (argc < 4)
+            WEECHAT_COMMAND_ERROR;
+        anchor1 = argv[2];
+        anchor2 = argv[3];
+        limit = (argc >= 5) ? atoi (argv[4]) : IRC_CHATHISTORY_DEFAULT_LIMIT;
+        irc_chathistory_send (ptr_server, IRC_CHATHISTORY_SUB_TARGETS,
+                              NULL, anchor1, anchor2, limit);
+    }
+    else
+    {
+        WEECHAT_COMMAND_ERROR;
+    }
+
+    return WEECHAT_RC_OK;
+}
+
+/*
  * Hook IRC commands.
  */
 
@@ -7198,9 +7324,9 @@ irc_command_init (void)
             "",
             N_("Capabilities supported by WeeChat are: "
                "account-notify, account-tag, away-notify, batch, cap-notify, "
-               "chghost, draft/multiline, echo-message, extended-join, "
-               "invite-notify, message-tags, multi-prefix, server-time, setname, "
-               "userhost-in-names."),
+               "chghost, draft/chathistory, draft/multiline, echo-message, "
+               "extended-join, invite-notify, message-tags, multi-prefix, "
+               "server-time, setname, userhost-in-names."),
             "",
             N_("The capabilities to automatically enable on servers can be set "
                "in option irc.server_default.capabilities (or by server in "
@@ -7221,6 +7347,52 @@ irc_command_init (void)
         " || ack " IRC_COMMAND_CAP_SUPPORTED "|%*"
         " || end",
         &irc_command_cap, NULL, NULL);
+    weechat_hook_command (
+        "chathistory",
+        N_("request message history from the server (IRCv3 draft/chathistory)"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("[latest [<target>] [<limit>]]"
+           " || before <target> <anchor> [<limit>]"
+           " || after <target> <anchor> [<limit>]"
+           " || around <target> <anchor> [<limit>]"
+           " || between <target> <anchor1> <anchor2> [<limit>]"
+           " || targets <anchor1> <anchor2> [<limit>]"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[latest]: get the most recent messages (default subcommand)"),
+            N_("raw[before]: get messages before an anchor"),
+            N_("raw[after]: get messages after an anchor"),
+            N_("raw[around]: get messages around an anchor"),
+            N_("raw[between]: get messages between two anchors"),
+            N_("raw[targets]: get list of targets with activity"),
+            N_("target: channel or nick name"),
+            N_("anchor: message reference, one of:"),
+            N_("> timestamp=YYYY-MM-DDThh:mm:ss.sssZ (ISO 8601 timestamp)"),
+            N_("> msgid=<id> (message id)"),
+            N_("> * (wildcard, for \"latest\" to get most recent messages)"),
+            N_("limit: max number of messages to return (default: 100)"),
+            "",
+            N_("Without arguments, fetches the latest messages for the current "
+               "channel (equivalent to: /chathistory latest)."),
+            "",
+            N_("This command requires the server to support the "
+               "\"draft/chathistory\" capability."),
+            "",
+            N_("Examples:"),
+            N_("  fetch latest 50 messages for current channel:"),
+            AI("    /chathistory latest 50"),
+            N_("  fetch messages before a timestamp:"),
+            AI("    /chathistory before #channel timestamp=2024-01-01T12:00:00.000Z 50"),
+            N_("  fetch messages before a message id:"),
+            AI("    /chathistory before #channel msgid=abc123 50"),
+            N_("  fetch messages between two timestamps:"),
+            AI("    /chathistory between #channel timestamp=2024-01-01T10:00:00.000Z timestamp=2024-01-01T12:00:00.000Z 100")),
+        "latest %(irc_channel)|%(irc_server_nicks)"
+        " || before %(irc_channel)|%(irc_server_nicks)"
+        " || after %(irc_channel)|%(irc_server_nicks)"
+        " || around %(irc_channel)|%(irc_server_nicks)"
+        " || between %(irc_channel)|%(irc_server_nicks)"
+        " || targets",
+        &irc_command_chathistory, NULL, NULL);
     weechat_hook_command (
         "connect",
         N_("connect to IRC server(s)"),
