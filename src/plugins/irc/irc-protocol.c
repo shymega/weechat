@@ -46,6 +46,7 @@
 #include "irc-batch.h"
 #include "irc-buffer.h"
 #include "irc-channel.h"
+#include "irc-chathistory.h"
 #include "irc-color.h"
 #include "irc-command.h"
 #include "irc-config.h"
@@ -1963,6 +1964,9 @@ IRC_PROTOCOL_CALLBACK(join)
             weechat_hashtable_remove (ctxt->server->join_channel_key, channel_name_lower);
             free (channel_name_lower);
         }
+
+        /* automatically fetch chat history if supported and enabled */
+        irc_chathistory_auto_fetch_on_join (ctxt->server, ctxt->params[0]);
     }
 
     return WEECHAT_RC_OK;

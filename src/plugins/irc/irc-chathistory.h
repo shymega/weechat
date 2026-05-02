@@ -45,5 +45,7 @@ extern void irc_chathistory_send (struct t_irc_server *server,
                                   const char *anchor1,
                                   const char *anchor2,
                                   int limit);
+extern void irc_chathistory_auto_fetch_on_join (struct t_irc_server *server,
+                                                const char *channel);
 
 #endif /* WEECHAT_PLUGIN_IRC_CHATHISTORY_H */
