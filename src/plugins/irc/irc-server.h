@@ -298,6 +298,8 @@ struct t_irc_server
     struct t_hashtable *names_channel_filter; /* filter for /names on channel*/
     struct t_irc_batch *batches;          /* batched events (cap "batch")    */
     struct t_irc_batch *last_batch;       /* last batch                      */
+    struct t_gui_buffer *chathistory_buffer; /* buffer during chathistory batch*/
+    int chathistory_before_line_id;       /* insert-before line id (-1: append)*/
     struct t_gui_buffer *buffer;          /* GUI buffer allocated for server */
     char *buffer_as_string;               /* used to return buffer info      */
     struct t_irc_channel *channels;       /* opened channels on server       */

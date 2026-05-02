@@ -1862,6 +1862,8 @@ irc_server_alloc (const char *name)
         NULL, NULL);
     new_server->batches = NULL;
     new_server->last_batch = NULL;
+    new_server->chathistory_buffer = NULL;
+    new_server->chathistory_before_line_id = -1;
     new_server->buffer = NULL;
     new_server->buffer_as_string = NULL;
     new_server->channels = NULL;

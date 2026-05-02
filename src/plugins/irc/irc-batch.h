@@ -24,6 +24,7 @@
 
 #include <time.h>
 
+struct t_gui_buffer;
 struct t_hashtable;
 struct t_irc_server;
 
@@ -39,6 +40,8 @@ struct t_irc_batch
     char **messages;                    /* messages separated by '\n'       */
     int end_received;                   /* batch end reference received     */
     int messages_processed;             /* 1 if msgs have been processed    */
+    struct t_gui_buffer *chathistory_buffer; /* buffer for chathistory msgs */
+    int chathistory_before_line_id;     /* line to insert before (-1: append)*/
     struct t_irc_batch *prev_batch;     /* link to previous batch           */
     struct t_irc_batch *next_batch;     /* link to next batch               */
 };

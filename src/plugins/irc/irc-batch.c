@@ -137,6 +137,8 @@ irc_batch_start_batch (struct t_irc_server *server, const char *reference,
     ptr_batch->messages = NULL;
     ptr_batch->end_received = 0;
     ptr_batch->messages_processed = 0;
+    ptr_batch->chathistory_buffer = NULL;
+    ptr_batch->chathistory_before_line_id = -1;
 
     irc_batch_add_to_list (server, ptr_batch);
 
@@ -231,6 +233,13 @@ irc_batch_process_messages (struct t_irc_server *server,
     if (!batch || !batch->messages)
         return;
 
+    /* for chathistory batches, set server context for printf-before insertion */
+    if (strcmp (batch->type, "chathistory") == 0)
+    {
+        server->chathistory_buffer = batch->chathistory_buffer;
+        server->chathistory_before_line_id = batch->chathistory_before_line_id;
+    }
+
     snprintf (modifier_data, sizeof (modifier_data),
               "%s,%s,%s",
               server->name,
@@ -299,6 +308,13 @@ irc_batch_process_messages (struct t_irc_server *server,
     }
 
     free (new_messages);
+
+    /* clear chathistory context after processing */
+    if (strcmp (batch->type, "chathistory") == 0)
+    {
+        server->chathistory_buffer = NULL;
+        server->chathistory_before_line_id = -1;
+    }
 }
 
 /*
