@@ -27,6 +27,7 @@
 #include "../weechat-plugin.h"
 #include "irc.h"
 #include "irc-chathistory.h"
+#include "irc-config.h"
 #include "irc-server.h"
 
 
@@ -97,4 +98,27 @@ irc_chathistory_send (struct t_irc_server *server,
                           "CHATHISTORY %s %s %s %d",
                           subcommand, target, anchor1, limit);
     }
+}
+
+/*
+ * Automatically fetches chat history for a channel on join, if the server
+ * supports draft/chathistory and the option is enabled.
+ */
+
+void
+irc_chathistory_auto_fetch_on_join (struct t_irc_server *server,
+                                    const char *channel)
+{
+    if (!server || !channel)
+        return;
+
+    if (!irc_chathistory_enabled (server))
+        return;
+
+    if (!IRC_SERVER_OPTION_BOOLEAN(server, IRC_SERVER_OPTION_CHATHISTORY_AUTO_FETCH))
+        return;
+
+    irc_chathistory_send (server, IRC_CHATHISTORY_SUB_LATEST,
+                          channel, "*", NULL,
+                          IRC_CHATHISTORY_DEFAULT_LIMIT);
 }
