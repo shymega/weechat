@@ -24,6 +24,7 @@ add_library(irc MODULE
   irc-bar-item.c irc-bar-item.h
   irc-batch.c irc-batch.h
   irc-buffer.c irc-buffer.h
+  irc-chathistory.c irc-chathistory.h
   irc-channel.c irc-channel.h
   irc-color.c irc-color.h
   irc-command.c irc-command.h
