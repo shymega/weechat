@@ -1098,6 +1098,75 @@ TEST(GuiLine, Add)
 
 /*
  * Test functions:
+ *   gui_line_add_before
+ *   gui_line_mixed_add_before
+ */
+
+TEST(GuiLine, AddBefore)
+{
+    struct t_gui_buffer *buffer;
+    struct t_gui_line *line1, *line2, *line3, *line4;
+
+    buffer = gui_buffer_new_user ("test_add_before",
+                                  GUI_BUFFER_TYPE_FORMATTED);
+    CHECK(buffer);
+
+    /* add two lines via normal gui_line_add */
+    line1 = gui_line_new (buffer, 0, 0, 0, 0, 0, NULL, "nick1", "msg1");
+    CHECK(line1);
+    gui_line_add (line1);
+    LONGS_EQUAL(1, buffer->own_lines->lines_count);
+    POINTERS_EQUAL(line1, buffer->own_lines->first_line);
+    POINTERS_EQUAL(line1, buffer->own_lines->last_line);
+
+    line2 = gui_line_new (buffer, 0, 0, 0, 0, 0, NULL, "nick2", "msg2");
+    CHECK(line2);
+    gui_line_add (line2);
+    LONGS_EQUAL(2, buffer->own_lines->lines_count);
+    POINTERS_EQUAL(line1, buffer->own_lines->first_line);
+    POINTERS_EQUAL(line2, buffer->own_lines->last_line);
+    POINTERS_EQUAL(line2, line1->next_line);
+    POINTERS_EQUAL(line1, line2->prev_line);
+
+    /* gui_line_add_before with NULL: should append (same as gui_line_add) */
+    line3 = gui_line_new (buffer, 0, 0, 0, 0, 0, NULL, "nick3", "appended");
+    CHECK(line3);
+    gui_line_add_before (line3, NULL);
+    LONGS_EQUAL(3, buffer->own_lines->lines_count);
+    POINTERS_EQUAL(line3, buffer->own_lines->last_line);
+    POINTERS_EQUAL(line2, line3->prev_line);
+    POINTERS_EQUAL(NULL, line3->next_line);
+
+    /* insert line4 before line2: list becomes line1 <-> line4 <-> line2 <-> line3 */
+    line4 = gui_line_new (buffer, 0, 0, 0, 0, 0, NULL, "nick4", "inserted");
+    CHECK(line4);
+    gui_line_add_before (line4, line2);
+    LONGS_EQUAL(4, buffer->own_lines->lines_count);
+    POINTERS_EQUAL(line1, buffer->own_lines->first_line);
+    POINTERS_EQUAL(line3, buffer->own_lines->last_line);
+    POINTERS_EQUAL(line4, line1->next_line);
+    POINTERS_EQUAL(line1, line4->prev_line);
+    POINTERS_EQUAL(line2, line4->next_line);
+    POINTERS_EQUAL(line4, line2->prev_line);
+
+    /* insert before first line: new line becomes first */
+    {
+        struct t_gui_line *line5;
+        line5 = gui_line_new (buffer, 0, 0, 0, 0, 0, NULL, "nick5", "new_first");
+        CHECK(line5);
+        gui_line_add_before (line5, line1);
+        LONGS_EQUAL(5, buffer->own_lines->lines_count);
+        POINTERS_EQUAL(line5, buffer->own_lines->first_line);
+        POINTERS_EQUAL(NULL, line5->prev_line);
+        POINTERS_EQUAL(line1, line5->next_line);
+        POINTERS_EQUAL(line5, line1->prev_line);
+    }
+
+    gui_buffer_close (buffer);
+}
+
+/*
+ * Test functions:
  *   gui_line_add_y
  */
 

@@ -925,6 +925,145 @@ TEST(GuiChat, PrintYDatetimeTags)
 
 /*
  * Test functions:
+ *   gui_chat_printf_datetime_tags_before
+ */
+
+TEST(GuiChat, PrintDatetimeTagsBefore)
+{
+    struct t_gui_buffer *buffer;
+    struct t_gui_line *ptr_last_line, *ptr_new_line;
+    struct t_gui_line_data *ptr_data;
+    int line_count, line_id;
+
+    buffer = gui_buffer_new_user ("test_printf_before",
+                                  GUI_BUFFER_TYPE_FORMATTED);
+    CHECK(buffer);
+
+    /* NULL message: no line added */
+    gui_chat_printf_datetime_tags (buffer, 0, 0, NULL, "line1");
+    line_count = buffer->own_lines->lines_count;
+    line_id = buffer->own_lines->last_line->data->id;
+    gui_chat_printf_datetime_tags_before (buffer, line_id, 0, 0, NULL, NULL);
+    LONGS_EQUAL(line_count, buffer->own_lines->lines_count);
+
+    /* invalid buffer pointer: no line added */
+    gui_chat_printf_datetime_tags_before ((struct t_gui_buffer *)0x1,
+                                          line_id, 0, 0, NULL, "test");
+    LONGS_EQUAL(line_count, buffer->own_lines->lines_count);
+
+    /* invalid line id: no line added */
+    gui_chat_printf_datetime_tags_before (buffer, -1, 0, 0, NULL, "test");
+    LONGS_EQUAL(line_count, buffer->own_lines->lines_count);
+
+    /* add a second line, then insert before it */
+    gui_chat_printf_datetime_tags (buffer, 0, 0, NULL, "line2");
+    LONGS_EQUAL(line_count + 1, buffer->own_lines->lines_count);
+    ptr_last_line = buffer->own_lines->last_line;
+    line_id = ptr_last_line->data->id;
+
+    gui_chat_printf_datetime_tags_before (buffer, line_id, 0, 0, NULL,
+                                          "nick\tinserted before line2");
+    LONGS_EQUAL(line_count + 2, buffer->own_lines->lines_count);
+
+    /* last line is still the same (insertion is before it, not after) */
+    POINTERS_EQUAL(ptr_last_line, buffer->own_lines->last_line);
+
+    /* the inserted line is immediately before the last line */
+    ptr_new_line = ptr_last_line->prev_line;
+    CHECK(ptr_new_line);
+    ptr_data = ptr_new_line->data;
+    CHECK(ptr_data);
+    POINTERS_EQUAL(buffer, ptr_data->buffer);
+    STRCMP_EQUAL("nick", ptr_data->prefix);
+    STRCMP_EQUAL("inserted before line2", ptr_data->message);
+    POINTERS_EQUAL(ptr_last_line, ptr_new_line->next_line);
+
+    /* with past date */
+    gui_chat_printf_datetime_tags_before (buffer, line_id, 946681200, 123456,
+                                          NULL, "nick\tpast date");
+    ptr_new_line = ptr_last_line->prev_line;
+    CHECK(ptr_new_line);
+    ptr_data = ptr_new_line->data;
+    CHECK(ptr_data);
+    LONGS_EQUAL(946681200, ptr_data->date);
+    LONGS_EQUAL(123456, ptr_data->date_usec);
+    STRCMP_EQUAL("past date", ptr_data->message);
+
+    /* with tags */
+    gui_chat_printf_datetime_tags_before (buffer, line_id, 0, 0, "tag1,tag2",
+                                          "tagged");
+    ptr_new_line = ptr_last_line->prev_line;
+    CHECK(ptr_new_line);
+    ptr_data = ptr_new_line->data;
+    CHECK(ptr_data);
+    LONGS_EQUAL(2, ptr_data->tags_count);
+    STRCMP_EQUAL("tag1", ptr_data->tags_array[0]);
+    STRCMP_EQUAL("tag2", ptr_data->tags_array[1]);
+    STRCMP_EQUAL("tagged", ptr_data->message);
+
+    gui_buffer_close (buffer);
+}
+
+/*
+ * Test functions:
+ *   gui_chat_delete_line
+ */
+
+TEST(GuiChat, DeleteLine)
+{
+    struct t_gui_buffer *buffer;
+    struct t_gui_line *ptr_prev_line;
+    int line_count, line_id;
+
+    buffer = gui_buffer_new_user ("test_delete_line",
+                                  GUI_BUFFER_TYPE_FORMATTED);
+    CHECK(buffer);
+
+    /* NULL buffer: no crash */
+    gui_chat_delete_line (NULL, 0);
+
+    /* invalid buffer pointer: no crash */
+    gui_chat_delete_line ((struct t_gui_buffer *)0x1, 0);
+
+    /* add three lines */
+    gui_chat_printf_datetime_tags (buffer, 0, 0, NULL, "line1");
+    gui_chat_printf_datetime_tags (buffer, 0, 0, NULL, "line2");
+    gui_chat_printf_datetime_tags (buffer, 0, 0, NULL, "line3");
+    line_count = buffer->own_lines->lines_count;
+    LONGS_EQUAL(3, line_count);
+
+    /* invalid line id: no change */
+    gui_chat_delete_line (buffer, -1);
+    LONGS_EQUAL(line_count, buffer->own_lines->lines_count);
+
+    /* delete the middle line (line2) */
+    ptr_prev_line = buffer->own_lines->last_line->prev_line;
+    CHECK(ptr_prev_line);
+    line_id = ptr_prev_line->data->id;
+    gui_chat_delete_line (buffer, line_id);
+    LONGS_EQUAL(line_count - 1, buffer->own_lines->lines_count);
+    POINTERS_EQUAL(NULL, gui_line_search_by_id (buffer, line_id));
+
+    /* first and last lines are now linked directly */
+    POINTERS_EQUAL(buffer->own_lines->last_line,
+                   buffer->own_lines->first_line->next_line);
+    POINTERS_EQUAL(buffer->own_lines->first_line,
+                   buffer->own_lines->last_line->prev_line);
+
+    /* delete the last line */
+    line_id = buffer->own_lines->last_line->data->id;
+    gui_chat_delete_line (buffer, line_id);
+    LONGS_EQUAL(line_count - 2, buffer->own_lines->lines_count);
+    POINTERS_EQUAL(NULL, gui_line_search_by_id (buffer, line_id));
+    POINTERS_EQUAL(buffer->own_lines->first_line,
+                   buffer->own_lines->last_line);
+    POINTERS_EQUAL(NULL, buffer->own_lines->first_line->next_line);
+
+    gui_buffer_close (buffer);
+}
+
+/*
+ * Test functions:
  *   gui_chat_hsignal_quote_line_cb
  */
 
